@@ -1,0 +1,58 @@
+site_name: s3cdsapi
+site_description: cdsapi for s3 and local files
+
+repo_url: https://github.com/mullenkamp/s3cdsapi
+repo_name: mullenkamp/s3cdsapi
+
+theme:
+    name: material
+    icon:
+        logo: material/library
+    palette:
+        # Palette toggle for light mode
+        - media: "(prefers-color-scheme: light)"
+          scheme: default
+          primary: amber
+          accent: indigo
+          toggle:
+            icon: material/brightness-7
+            name: Switch to dark mode
+
+        # Palette toggle for dark mode
+        - media: "(prefers-color-scheme: dark)"
+          scheme: slate
+          primary: amber
+          accent: indigo
+          toggle:
+            icon: material/brightness-4
+            name: Switch to light mode
+
+markdown_extensions:
+    - toc:
+        permalink: true
+    - pymdownx.highlight:
+        anchor_linenums: true
+    - pymdownx.tasklist:
+        custom_checkbox: true
+    - pymdownx.inlinehilite
+    - pymdownx.snippets
+    - pymdownx.superfences
+
+plugins:
+    - search
+    - mkdocstrings:
+        handlers:
+            python:
+                import:
+                    - https://docs.python.org/3.11/objects.inv
+                options:
+                    docstring_style: google
+
+watch:
+    - docs
+    - s3cdsapi
+
+nav:
+    - About: index.md
+    - Reference:
+        - s3cdsapi: reference/s3cdsapi.md
