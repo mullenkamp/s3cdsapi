@@ -8,7 +8,8 @@ Created on Mon Mar 17 17:40:01 2025
 import os
 import booklet
 from time import time
-from s3cdsapi import Manager
+import urllib3
+# from s3cdsapi import Manager
 
 
 ##############################################
@@ -34,6 +35,7 @@ output_format = 'netcdf'
 key = 'bfe6e61db232a76f2f0af9'
 
 
+
 ##############################################
 ### Tests
 
@@ -50,11 +52,11 @@ staged_dict = self.read_staged_file()
 
 removed_job_ids = self.clear_jobs()
 
-submitted_jobs = self.submit_jobs(5)
+submitted_jobs = self.submit_jobs(3)
 
 jobs = self.get_jobs()
 
-job = jobs['bfe6e61db232a76f2f0af9']
+job = jobs[0]
 
 results_path = job.download_results(chunk_size=2**21, delete_job=True)
 
@@ -62,6 +64,25 @@ results_path = job.download_results(chunk_size=2**21, delete_job=True)
 n_completed = self.run_jobs(5)
 
 removed_job_ids = self.clear_jobs(True)
+
+jobs_list = self._get_jobs_list()
+
+job_id = '1e8e0da9-e4da-4f9f-afd0-8ac9e2ff61a9'
+
+job_status_url = f'{cds_url_endpoint}/retrieve/v1/jobs/{job_id}?request=true'
+headers = {'PRIVATE-TOKEN': f'{cds_key}'}
+
+http_session = urllib3.PoolManager()
+job_resp = http_session.request('get', job_status_url, headers=headers)
+
+job_dict = job_resp.json()
+
+
+jobs_url = f'{cds_url_endpoint}/retrieve/v1/jobs?limit=100&request=true'
+
+jobs_resp = http_session.request('get', jobs_url, headers=headers)
+
+jobs_dict = jobs_resp.json()
 
 # f = booklet.open(self.staged_file_path)
 

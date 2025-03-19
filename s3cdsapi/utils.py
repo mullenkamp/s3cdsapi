@@ -26,6 +26,8 @@ file_naming_str = '{product}.{variable}.{from_date}!{to_date}.{job_hash}.{ext}'
 key_hash_len = 11
 chunk_size = 2**21
 
+all_statuses = ('failed', 'successful', 'accepted', 'running')
+
 ### cdsapi
 # headers = {
 #     'PRIVATE-TOKEN': '{key}'
@@ -33,7 +35,7 @@ chunk_size = 2**21
 
 url_endpoint = 'https://cds.climate.copernicus.eu/api'
 jobs_url = '{url_endpoint}/retrieve/v1/jobs?limit=100'
-job_status_url = '{url_endpoint}/retrieve/v1/jobs/{job_id}'
+job_status_url = '{url_endpoint}/retrieve/v1/jobs/{job_id}?request={req_bool}'
 job_results_url = '{url_endpoint}/retrieve/v1/jobs/{job_id}/results'
 job_delete_url = '{url_endpoint}/retrieve/v1/jobs/{job_id}'
 request_url = '{url_endpoint}/retrieve/v1/processes/{product}/execute/'
@@ -80,25 +82,57 @@ def process_local_paths(save_path):
     return save_path, staged_file_path
 
 
-def make_file_name(request_model, job_hash, product):
+# def make_file_name(request_model, job_hash, product):
+#     """
+
+#     """
+#     variable = request_model.variable[0].value
+
+#     year0 = request_model.year[0]
+#     month0 = request_model.month[0].value
+#     day0 = request_model.day[0].value
+#     from_date = f'{year0}-{month0}-{day0}'
+
+#     year1 = request_model.year[-1]
+#     month1 = request_model.month[-1].value
+#     day1 = request_model.day[-1].value
+#     to_date = f'{year1}-{month1}-{day1}'
+
+#     # lat_min, lon_min, lat_max, lon_max = [int(v*10) for v in request_model.area]
+
+#     data_format = request_model.data_format.value
+#     if data_format == 'netcdf':
+#         ext = 'nc'
+#     elif data_format == 'grib':
+#         ext = 'grib'
+#     else:
+#         raise ValueError('How did this happen!')
+
+#     # file_name = file_naming_str.format(product=product, variable=variable, lat_min=lat_min, lon_min=lon_min, lat_max=lat_max, lon_max=lon_max, job_hash=job_hash, ext=ext, from_date=from_date, to_date=to_date)
+#     file_name = file_naming_str.format(product=product, variable=variable, job_hash=job_hash, ext=ext, from_date=from_date, to_date=to_date)
+
+#     return file_name
+
+
+def make_file_name(request_dict, job_hash, product):
     """
 
     """
-    variable = request_model.variable[0].value
+    variable = request_dict['variable'][0]
 
-    year0 = request_model.year[0]
-    month0 = request_model.month[0].value
-    day0 = request_model.day[0].value
+    year0 = request_dict['year'][0]
+    month0 = request_dict['month'][0]
+    day0 = request_dict['day'][0]
     from_date = f'{year0}-{month0}-{day0}'
 
-    year1 = request_model.year[-1]
-    month1 = request_model.month[-1].value
-    day1 = request_model.day[-1].value
+    year1 = request_dict['year'][-1]
+    month1 = request_dict['month'][-1]
+    day1 = request_dict['day'][-1]
     to_date = f'{year1}-{month1}-{day1}'
 
     # lat_min, lon_min, lat_max, lon_max = [int(v*10) for v in request_model.area]
 
-    data_format = request_model.data_format.value
+    data_format = request_dict['data_format']
     if data_format == 'netcdf':
         ext = 'nc'
     elif data_format == 'grib':

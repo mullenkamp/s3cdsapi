@@ -58,7 +58,7 @@ def round_area(area):
 Point = Annotated[float, msgspec.Meta(ge=-180, le=180)]
 
 
-class era5_land(msgspec.Struct, tag=True):
+class era5_land(msgspec.Struct, tag_field='product', tag='reanalysis-era5-land'):
     """
 
     """
@@ -75,7 +75,7 @@ class era5_land(msgspec.Struct, tag=True):
     #     self.area = round_area(self.area)
 
 
-class era5_single_levels(msgspec.Struct, tag=True):
+class era5_single_levels(msgspec.Struct, tag_field='product', tag='reanalysis-era5-single-levels'):
     """
 
     """
@@ -93,7 +93,7 @@ class era5_single_levels(msgspec.Struct, tag=True):
     #     self.area = round_area(self.area)
 
 
-class era5_pressure_levels(msgspec.Struct, tag=True):
+class era5_pressure_levels(msgspec.Struct, tag_field='product', tag='reanalysis-era5-pressure-levels'):
     """
 
     """

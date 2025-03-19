@@ -118,6 +118,14 @@ response_dict = {
  }
 ```
 
+A newly discovered parameter that can be added to  the job_status_url is 'request'.
+For our above example:
+```
+job_status_url = 'https://cds.climate.copernicus.eu/api/retrieve/v1/jobs/993a2b8f-b885-40c3-9d70-56d9273f199f?request=true'
+```
+
+This will return the request_params back to the user, which can be useful.
+
 #### Check the status of all jobs
 The other option is to check the status of all jobs.
 
