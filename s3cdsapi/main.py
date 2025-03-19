@@ -52,7 +52,7 @@ class Manager:
         cds_key: str
             The key provided after registration.
         s3_base_key: str or None
-            The base path where the S3 files will be saved if S3 credentials are provided.
+            The base path where the S3 files will be saved if S3 credentials are provided. Backslashes should be used to separate 'directories'.
         s3_kwargs:
             Any kwargs passed to S3Session of the s3func package. The required kwargs include access_key_id, access_key, and bucket.
 
@@ -197,7 +197,33 @@ class Manager:
 
     def stage_jobs(self, product: str, variables: str | List[str], from_date: str | pd.Timestamp, to_date: str | pd.Timestamp, bbox: List[float], freq_interval: str, product_types: str | List[str]=None, pressure_levels: str | List[str]=None, output_format: str='netcdf', check_existing_files=True):
         """
+        Create requests and stage them in a file to be submitted later. This must be run before the submit_jobs method.
 
+        Parameters
+        ----------
+        product: str
+            The ECMWF product - e.g. reanalysis-era5-land. A list of all available products can be found by calling self.available_products.
+        variables: str or list of str
+            The variables from the product. A dict of all available variables per product can be found by calling self.available_variables.
+        from_date: str or pd.Timestamp
+            The start date.
+        to_date: str or pd.Timestamp
+            The end date.
+        freq_interval: pandas frequency string
+            The frequency that the data should be chunked. For example, 'Y' will create yearly files.
+        product_types: str, list of str, or None
+            The product types if the product has them. A dict of all available product types per product can be found by calling self.available_product_types.
+        pressure_levels: str, list of str, or None
+            The pressure levels if the product has them. A dict of all available pressure levels per product can be found by calling self.available_pressure_levels.
+        output_format: str
+            Eiter 'netcdf' or 'grib'.
+        check_existing_files: bool
+            Should the existing files be checked to make sure they don't get submitted again? This should normally be on. Only turn off for testing.
+
+        Returns
+        -------
+        pathlib.Path
+            staged file path
         """
         variables1, product_types1, bbox1, pressure_levels1, dates1, from_date1 = self._input_checks(product, variables, from_date, to_date, bbox, freq_interval, product_types, pressure_levels, output_format)
 
@@ -263,7 +289,7 @@ class Manager:
 
     def read_staged_file(self):
         """
-
+        Return a dict of all the requests that have been staged. The keys are the hex hashes of the requests.
         """
         if self.staged_file_path.exists():
             dict1 = {}
@@ -279,6 +305,7 @@ class Manager:
 
     def clear_jobs(self, all_jobs=False, only_failed=False):
         """
+        Remove jobs on the server and on the local files.
         When all_jobs is False, then only the jobs that are not in the jobs file will be removed. Otherwise, all jobs will be removed.
         """
         jobs_list = self._get_jobs_list()
@@ -335,7 +362,16 @@ class Manager:
 
     def submit_jobs(self, n_jobs_queued=15):
         """
+        Submit jobs to the server from the requests in the staged file. It will only submit the the value given by the n_jobs_queued parameter.
 
+        Parameters
+        ----------
+        n_jobs_queued: int
+            The max number of jobs to have in the queue on the server.
+
+        Returns
+        -------
+        set of the job hashes
         """
         jobs_list = self._get_jobs_list()
 
@@ -408,7 +444,11 @@ class Manager:
 
     def get_jobs(self):
         """
+        Get a dict of the jobs on the server that are also in the jobs file. The keys are the job hashes.
 
+        Returns
+        -------
+        dict of the jobs
         """
         jobs_list = self._get_jobs_list()
         jobs = {}
@@ -434,7 +474,16 @@ class Manager:
 
     def run_jobs(self, n_jobs_queued=15):
         """
+        An automated process to submit jobs, wait for them to be completed, download completed jobs, and resubmit more jobs. This continues until all of the requests in the staged file are processed.
 
+        Parameters
+        ----------
+        n_jobs_queued: int
+            The max number of jobs to have in the queue on the server.
+
+        Returns
+        -------
+        int of the number of completed jobs
         """
         n_completed = 0
         while True:
@@ -539,7 +588,7 @@ class Job:
 
     def update(self):
         """
-
+        Update the data of a job from the server.
         """
         if self.status == 'dismissed':
             raise ValueError('Job has been deleted.')
@@ -586,15 +635,13 @@ class Job:
 
             ## Remove from Queue file
             if self.status in ('successful', 'failed'):
-                # job_hash = utils.get_value(self.queue_file_path, self.job_id)
-                # if job_hash:
                 with booklet.open(self.job_file_path, 'w') as f:
                     del f[self.job_id]
 
 
     def delete(self):
         """
-
+        Delete the job from the server and locally.
         """
         http_session = utils.session()
         url = utils.job_delete_url.format(url_endpoint=self.url_endpoint, job_id=self.job_id)
@@ -682,7 +729,18 @@ class Job:
 
     def download_results(self, chunk_size=2**21, delete_job=True):
         """
+        Download a completed job. If the S3 parameters were assigned at the Manager init, then it will upload the file to S3.
 
+        Parameters
+        ----------
+        chunk_size: int
+            The read/write chunk size in bytes
+        delete_job: bool
+            Should the job be deleted after it successfully downloads? This should only be changed for testing purposes.
+
+        Returns
+        -------
+        pathlib.Path to the file or the S3 object key
         """
         if self.s3_session_kwargs is None:
             path = self._download_results_local(chunk_size, delete_job)
