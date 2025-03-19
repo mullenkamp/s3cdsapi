@@ -22,7 +22,8 @@ import urllib3
 # from urllib3.util import Retry, Timeout
 urllib3.disable_warnings()
 
-import utils, models, product_params
+# import utils, models, product_params
+from . import utils, models, product_params
 
 ################################################
 ### Parameters
@@ -38,7 +39,7 @@ class Manager:
 
     """
     ## Initialization
-    def __init__(self, save_path: str | pathlib.Path, cds_url_endpoint: str, cds_key: str, base_key: str=None, access_key_id: str=None, access_key: str=None, bucket: str=None, **kwargs):
+    def __init__(self, save_path: str | pathlib.Path, cds_url_endpoint: str, cds_key: str, s3_base_key: str=None, **s3_kwargs):
         """
         Class to download CDS data via their cdsapi. This is just a wrapper on top of cdsapi that makes it more useful as an API. The user needs to register by following the procedure here: https://cds.climate.copernicus.eu/api-how-to.
 
@@ -50,16 +51,10 @@ class Manager:
             The endpoint URL provided after registration.
         cds_key: str
             The key provided after registration.
-        base_key: str or None
+        s3_base_key: str or None
             The base path where the S3 files will be saved if S3 credentials are provided.
-        access_key_id : str or None
-            The access key id also known as aws_access_key_id.
-        access_key : str or None
-            The access key also known as aws_secret_access_key.
-        bucket : str or None
-            The bucket to be used when performing S3 operations.
-        kwargs:
-            Any additional kwargs passed to S3Session of the s3func package.
+        s3_kwargs:
+            Any kwargs passed to S3Session of the s3func package. The required kwargs include access_key_id, access_key, and bucket.
 
         Returns
         -------
@@ -75,19 +70,23 @@ class Manager:
             with booklet.open(staged_file_path, 'n', 'str', 'bytes'):
                 pass
 
-        if isinstance(access_key_id, str):
-            if not isinstance(access_key, str) and not isinstance(bucket, str) and not isinstance(base_key, str):
-                raise TypeError('If access_key_id is a string, then access_key, bucket, and base_key must also be strings.')
+        if s3_kwargs:
+            # if not isinstance(access_key, str) and not isinstance(bucket, str) and not isinstance(base_key, str):
+            #     raise TypeError('If access_key_id is a string, then access_key, bucket, and base_key must also be strings.')
 
-            kwargs.update(dict(access_key_id=access_key_id, access_key=access_key, bucket=bucket))
-            s3_session_kwargs = kwargs
+            # kwargs.update(dict(access_key_id=access_key_id, access_key=access_key, bucket=bucket))
 
-            if not base_key.endswith('/'):
-                base_key += '/'
-            s3_base_key = base_key
+            if not isinstance(s3_base_key, str):
+                raise TypeError('If kwargs is passed, then s3_base_key must be a string.')
+
+            s3_session_kwargs = s3_kwargs
+
+            if not s3_base_key.endswith('/'):
+                s3_base_key += '/'
+            s3_base_key = s3_base_key
         else:
             s3_session_kwargs = None
-            base_key = None
+            s3_base_key = None
 
         self.s3_session_kwargs = s3_session_kwargs
         self.s3_base_key = s3_base_key
@@ -332,7 +331,7 @@ class Manager:
         return remove_job_ids
 
 
-    def submit_jobs(self, n_jobs_queued=10):
+    def submit_jobs(self, n_jobs_queued=15):
         """
 
         """
@@ -357,20 +356,19 @@ class Manager:
                 with booklet.open(self.job_file_path, 'w') as jf:
                     for job_id, jf_job_hash in jf.items():
                         job_hashes.add(jf_job_hash)
-    
-    
+
                     for job_hash, request_bytes in sf.items():
                         if new_n_queued >= extra_n_queued:
                             break
-    
+
                         if job_hash not in job_hashes:
                             request_model = models.loads(request_bytes)
                             model_type = request_model.__class__.__name__
                             product = models.inv_model_types[model_type]
                             request_url = utils.request_url.format(url_endpoint=self.url_endpoint, product=product)
-    
+
                             request_dict = msgspec.to_builtins(request_model)
-    
+
                             resp = http_session.request('post', request_url, json={'inputs': request_dict}, headers=self.headers)
                             resp_dict = resp.json()
                             if resp.status // 100 != 2:
@@ -380,7 +378,7 @@ class Manager:
                                 jf[job_id] = job_hash
                                 job_hashes.add(job_hash)
                                 submitted_jobs.add(job_hash)
-    
+
                             sleep(2) # Submitting jobs too quickly makes CDS angry
 
             return submitted_jobs
@@ -401,7 +399,7 @@ class Manager:
         jobs_dict = jobs_resp.json()
         n_jobs = jobs_dict['metadata']['totalCount']
         if n_jobs == 100:
-            print('The number of jobs on the server is greater than 100. Please delete finished/failed jobs.')
+            print('The number of jobs on the server is greater than 100. Please delete finished/failed jobs using clear_jobs.')
 
         jobs_list = jobs_dict['jobs']
 
@@ -432,6 +430,41 @@ class Manager:
             print(f'There are {n_missing_jobs} jobs that are not in the jobs file file.')
 
         return jobs
+
+
+    def run_jobs(self, n_jobs_queued=15):
+        """
+
+        """
+        n_completed = 0
+        while True:
+            _ = self.submit_jobs(n_jobs_queued=n_jobs_queued)
+            sleep(2)
+            jobs = self.get_jobs()
+            if len(jobs) == 0:
+                break
+
+            ## Check and remove failed jobs
+            failed_bool = False
+            for job_hash, job in jobs.items():
+                if job.status == 'failed':
+                    failed_bool = True
+
+            if failed_bool:
+                _ = self.clear_jobs(all_jobs=False, only_failed=True)
+                sleep(2)
+                jobs = self.get_jobs()
+
+            ## If any are successful, then download
+            for job_hash, job in jobs.items():
+                if job.status == 'successful':
+                    results_path = job.download_results()
+                    print(f'{job.file_name} completed')
+                    n_completed += 1
+
+            sleep(60)
+
+        return n_completed
 
 
 class Job:
@@ -484,6 +517,12 @@ class Job:
         else:
             self.results = None
             self.error = None
+
+        request_bytes = utils.get_value(self.staged_file_path, self.job_hash)
+        request_model = models.loads(request_bytes)
+
+        file_name = utils.make_file_name(request_model, self.job_hash, self.product)
+        self.file_name = file_name
 
 
     def __repr__(self):
@@ -583,16 +622,7 @@ class Job:
         if self.results is None:
             raise ValueError('No results to download.')
 
-        ## Make file name/path
-        # job_hash = utils.get_value(self.job_file_path, self.job_id)
-        # if job_hash is None:
-        #     raise ValueError('The job does not exist in the jobs.blt. Run clear in the Manager to remove it.')
-
-        request_bytes = utils.get_value(self.staged_file_path, self.job_hash)
-        request_model = models.loads(request_bytes)
-
-        file_name = utils.make_file_name(request_model, self.job_hash, self.product)
-        file_path = self.save_path.joinpath(file_name)
+        file_path = self.save_path.joinpath(self.file_name)
 
         http_session = utils.session()
         download_url = self.results['href']
@@ -622,29 +652,19 @@ class Job:
         if self.results is None:
             raise ValueError('No results to download.')
 
-        ## Make file name/path
-        # job_hash = utils.get_value(self.job_file_path, self.job_id)
-        # if job_hash is None:
-        #     raise ValueError('The job does not exist in the jobs.blt. Run clear in the Manager to remove it.')
-
-        request_bytes = utils.get_value(self.staged_file_path, self.job_hash)
-        request_model = models.loads(request_bytes)
-
-        file_name = utils.make_file_name(request_model, self.job_hash, self.product)
-
         http_session = utils.session()
         download_url = self.results['href']
         resp = http_session.request('get', download_url, preload_content=False)
         if resp.status // 100 != 2:
             raise urllib3.exceptions.HTTPError(resp.json())
 
-        file_path = self.save_path.joinpath(file_name)
+        file_path = self.save_path.joinpath(self.file_name)
         with open(file_path, 'wb') as f:
             shutil.copyfileobj(resp, f, chunk_size)
 
         resp.release_conn()
 
-        key_name = self.s3_base_key + file_name
+        key_name = self.s3_base_key + self.file_name
         s3_session = S3Session(**self.s3_session_kwargs)
         # reader = io.BufferedReader(resp, chunk_size)
         put_resp = s3_session.put_object(key_name, open(file_path, 'rb'))
@@ -652,14 +672,6 @@ class Job:
             raise urllib3.exceptions.HTTPError(put_resp.json())
 
         os.unlink(file_path)
-
-        # start = time()
-        # with open(file_path, 'wb') as f:
-        #     shutil.copyfileobj(resp, f, chunk_size)
-        # end = time()
-        # print(end - start)
-
-        # resp.release_conn()
 
         ## Remove from server
         if delete_job:

@@ -8,7 +8,7 @@ Created on Mon Mar 17 17:40:01 2025
 import os
 import booklet
 from time import time
-# from s3cdsapi import Stager, Manager
+from s3cdsapi import Manager
 
 
 ##############################################
@@ -18,7 +18,7 @@ save_path = os.path.realpath(os.path.dirname(__file__))
 
 cds_url_endpoint = 'https://cds.climate.copernicus.eu/api'
 
-base_key = 'test/'
+s3_base_key = 'reanalysis-era5-land/'
 
 variables = ['2m_dewpoint_temperature']
 from_date = '1950-01-01'
@@ -41,7 +41,7 @@ key = 'bfe6e61db232a76f2f0af9'
 # staged_file = stager.stage_jobs(product, variables, from_date, to_date, bbox, freq_interval, product_types, pressure_levels, output_format)
 
 self = Manager(save_path, cds_url_endpoint, cds_key)
-self = Manager(save_path, cds_url_endpoint, cds_key, base_key, access_key_id, access_key, bucket, endpoint_url=endpoint_url)
+self = Manager(save_path, cds_url_endpoint, cds_key, s3_base_key, access_key_id=access_key_id, access_key=access_key, bucket=bucket, endpoint_url=endpoint_url)
 
 staged_file_path = self.stage_jobs(product, variables, from_date, to_date, bbox, freq_interval, product_types, pressure_levels, output_format)
 
@@ -57,6 +57,8 @@ job = jobs['bfe6e61db232a76f2f0af9']
 
 results_path = job.download_results(chunk_size=2**21, delete_job=True)
 
+
+n_completed = self.run_jobs(15)
 
 # f = booklet.open(self.staged_file_path)
 

@@ -9,7 +9,8 @@ import msgspec
 import enum
 from typing import Set, Optional, Dict, Tuple, List, Union, Any, Annotated
 
-import product_params
+# import product_params
+from . import product_params
 
 ######################################################
 ### Enums

@@ -117,3 +117,5 @@ data/*
 # Test config files
 /s3cdsapi/tests/*.toml
 /s3cdsapi/tests/*.yml
+/s3cdsapi/tests/*.blt
+/s3cdsapi/tests/*.nc

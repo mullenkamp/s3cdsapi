@@ -14,7 +14,8 @@ import urllib3
 import urllib.parse
 from urllib3.util import Retry, Timeout
 
-import product_params
+# import product_params
+from . import product_params
 
 ##########################################
 ### Parameters
@@ -23,7 +24,6 @@ file_naming_str = '{product}.{variable}.{lat_min:.1f}!{lon_min:.1f}!{lat_max:.1f
 
 key_hash_len = 11
 chunk_size = 2**21
-
 
 ### cdsapi
 # headers = {
