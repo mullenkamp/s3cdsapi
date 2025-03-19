@@ -494,22 +494,31 @@ class Manager:
                 break
 
             ## Check and remove failed jobs
-            failed_bool = False
-            for job_hash, job in jobs.items():
-                if job.status == 'failed':
-                    failed_bool = True
+            # failed_bool = False
+            # for job_hash, job in jobs.items():
+            #     if job.status == 'failed':
+            #         failed_bool = True
 
-            if failed_bool:
-                _ = self.clear_jobs(all_jobs=False, only_failed=True)
-                sleep(2)
-                jobs = self.get_jobs()
+            # if failed_bool:
+            #     _ = self.clear_jobs(all_jobs=False, only_failed=True)
+            #     sleep(2)
+            #     jobs = self.get_jobs()
 
-            ## If any are successful, then download
+            ## If any are successful, then download otherwise delete and try again later
             for job_hash, job in jobs.items():
                 if job.status == 'successful':
-                    results_path = job.download_results()
-                    print(f'{job.file_name} completed')
-                    n_completed += 1
+                    if job.error:
+                        print('-- Job status is successful, but there are no results:')
+                        print(job.error)
+                        job.delete(True)
+                    else:
+                        results_path = job.download_results()
+                        print(f'-- {job.file_name} completed')
+                        n_completed += 1
+                elif job.status == 'failed':
+                    job.delete(True)
+                    print('-- Job failed with the error:')
+                    print(job.error)
 
             sleep(60)
 
@@ -639,9 +648,14 @@ class Job:
                     del f[self.job_id]
 
 
-    def delete(self):
+    def delete(self, job_file_only=False):
         """
         Delete the job from the server and locally.
+
+        Parameters
+        ----------
+        job_file_only: bool
+            Only remove the job from the job file and not from the staged file. Good if your job failed and you want to retry later.
         """
         http_session = utils.session()
         url = utils.job_delete_url.format(url_endpoint=self.url_endpoint, job_id=self.job_id)
@@ -658,7 +672,7 @@ class Job:
                     job_hash = jf[self.job_id]
                     del jf[self.job_id]
 
-                    if job_hash in sf:
+                    if job_hash in sf and not job_file_only:
                         del sf[job_hash]
 
 
