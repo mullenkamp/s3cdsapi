@@ -11,6 +11,12 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+  'booklet>=0.7.8',
+  's3func>=0.7.0',
+  'pandas',
+  'numpy',
+  'urllib3>=2',
+  'msgspec',
 ]
 
 [dependency-groups]
@@ -22,8 +28,6 @@ dev = [
   "pytest",
   "pytest-cov",
 ]
-
-
 
 [tool.hatch]
 
@@ -34,16 +38,6 @@ allow-direct-references = true
 # source = "regex_commit"
 # commit_extra_args = ["-e"]
 # path = "s3cdsapi/__init__.py"
-
-[dependency-groups]
-dev = [
-  "spyder-kernels==2.5.2",
-  "black",
-  "mypy",
-  "ruff",
-  "pytest",
-  "pytest-cov",
-]
 
 [tool.hatch.envs.default]
 python = "3.11"
