@@ -23,9 +23,10 @@ s3_base_key = 'reanalysis-era5-land/'
 variables = ['2m_dewpoint_temperature']
 from_date = '1950-01-01'
 to_date = '1950-01-31'
+to_date = '1990-12-31'
 bbox = [-34.3, 166.3, -47.3, 178.6]
 product = 'reanalysis-era5-land'
-freq_interval = 'M'
+freq_interval = 'Y'
 product_types = None
 pressure_levels = None
 output_format = 'netcdf'
@@ -49,7 +50,7 @@ staged_dict = self.read_staged_file()
 
 removed_job_ids = self.clear_jobs()
 
-submitted_jobs = self.submit_jobs()
+submitted_jobs = self.submit_jobs(5)
 
 jobs = self.get_jobs()
 
@@ -58,7 +59,9 @@ job = jobs['bfe6e61db232a76f2f0af9']
 results_path = job.download_results(chunk_size=2**21, delete_job=True)
 
 
-n_completed = self.run_jobs(15)
+n_completed = self.run_jobs(5)
+
+removed_job_ids = self.clear_jobs(True)
 
 # f = booklet.open(self.staged_file_path)
 

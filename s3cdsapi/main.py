@@ -287,9 +287,11 @@ class Manager:
 
         remove_job_ids = set()
         job_ids = set()
-        with booklet.open(self.job_file_path, 'r') as jf:
-            for jf_job_id in jf.keys():
-                job_ids.add(jf_job_id)
+
+        if not all_jobs:
+            with booklet.open(self.job_file_path, 'r') as jf:
+                for jf_job_id in jf.keys():
+                    job_ids.add(jf_job_id)
 
         for job_dict in jobs_list:
             job_id = job_dict['jobID']
@@ -342,14 +344,11 @@ class Manager:
             if job_dict['status'] == 'accepted':
                 n_queued += 1
 
-        extra_n_queued = n_jobs_queued - n_queued
-
-        if extra_n_queued > 0:
+        if n_queued < n_jobs_queued:
             # print(f'-- {extra_n_queued} jobs will be submitted')
 
             http_session = utils.session()
 
-            new_n_queued = 0
             job_hashes = set()
             submitted_jobs = set()
             with booklet.open(self.staged_file_path, 'r') as sf:
@@ -358,7 +357,7 @@ class Manager:
                         job_hashes.add(jf_job_hash)
 
                     for job_hash, request_bytes in sf.items():
-                        if new_n_queued >= extra_n_queued:
+                        if n_queued == n_jobs_queued:
                             break
 
                         if job_hash not in job_hashes:
@@ -378,6 +377,7 @@ class Manager:
                                 jf[job_id] = job_hash
                                 job_hashes.add(job_hash)
                                 submitted_jobs.add(job_hash)
+                                n_queued += 1
 
                             sleep(2) # Submitting jobs too quickly makes CDS angry
 
@@ -669,7 +669,7 @@ class Job:
         # reader = io.BufferedReader(resp, chunk_size)
         put_resp = s3_session.put_object(key_name, open(file_path, 'rb'))
         if put_resp.status // 100 != 2:
-            raise urllib3.exceptions.HTTPError(put_resp.json())
+            raise urllib3.exceptions.HTTPError(put_resp.error)
 
         os.unlink(file_path)
 

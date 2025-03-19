@@ -20,7 +20,8 @@ from . import product_params
 ##########################################
 ### Parameters
 
-file_naming_str = '{product}.{variable}.{lat_min:.1f}!{lon_min:.1f}!{lat_max:.1f}!{lon_max:.1f}.{from_date}!{to_date}.{job_hash}.{ext}'
+# file_naming_str = '{product}.{variable}.{lat_min}!{lon_min}!{lat_max}!{lon_max}.{from_date}!{to_date}.{job_hash}.{ext}'
+file_naming_str = '{product}.{variable}.{from_date}!{to_date}.{job_hash}.{ext}'
 
 key_hash_len = 11
 chunk_size = 2**21
@@ -95,7 +96,7 @@ def make_file_name(request_model, job_hash, product):
     day1 = request_model.day[-1].value
     to_date = f'{year1}-{month1}-{day1}'
 
-    lat_min, lon_min, lat_max, lon_max = request_model.area
+    # lat_min, lon_min, lat_max, lon_max = [int(v*10) for v in request_model.area]
 
     data_format = request_model.data_format.value
     if data_format == 'netcdf':
@@ -105,7 +106,8 @@ def make_file_name(request_model, job_hash, product):
     else:
         raise ValueError('How did this happen!')
 
-    file_name = file_naming_str.format(product=product, variable=variable, lat_min=lat_min, lon_min=lon_min, lat_max=lat_max, lon_max=lon_max, job_hash=job_hash, ext=ext, from_date=from_date, to_date=to_date)
+    # file_name = file_naming_str.format(product=product, variable=variable, lat_min=lat_min, lon_min=lon_min, lat_max=lat_max, lon_max=lon_max, job_hash=job_hash, ext=ext, from_date=from_date, to_date=to_date)
+    file_name = file_naming_str.format(product=product, variable=variable, job_hash=job_hash, ext=ext, from_date=from_date, to_date=to_date)
 
     return file_name
 
