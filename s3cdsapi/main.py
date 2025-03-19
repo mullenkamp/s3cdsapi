@@ -370,12 +370,12 @@ class Manager:
         -------
         set of the job hashes
         """
-        jobs_list = self._get_jobs_list()
+        jobs = self.get_jobs()
 
         job_hashes = set()
-        for job_dict in jobs_list:
-            if job_dict['status'] == 'accepted':
-                job_hashes.add(job_dict['job_hash'])
+        for job in jobs:
+            if job.status == 'accepted':
+                job_hashes.add(job.job_hash)
 
         if len(job_hashes) < n_jobs_queued:
             # print(f'-- {extra_n_queued} jobs will be submitted')
