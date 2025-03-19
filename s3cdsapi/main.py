@@ -61,10 +61,10 @@ class Manager:
         Manager object
         """
         save_path, staged_file_path = utils.process_local_paths(save_path)
-        job_file_path = save_path.joinpath('jobs.blt')
-        if not job_file_path.exists():
-            with booklet.open(job_file_path, 'n', 'str', 'str'):
-                pass
+        # job_file_path = save_path.joinpath('jobs.blt')
+        # if not job_file_path.exists():
+        #     with booklet.open(job_file_path, 'n', 'str', 'str'):
+        #         pass
 
         if not staged_file_path.exists():
             with booklet.open(staged_file_path, 'n', 'str', 'bytes'):
@@ -96,7 +96,7 @@ class Manager:
 
         self.save_path = save_path
         self.staged_file_path = staged_file_path
-        self.job_file_path = job_file_path
+        # self.job_file_path = job_file_path
 
         setattr(self, 'available_variables', product_params.available_variables)
         setattr(self, 'available_products', list(product_params.available_variables.keys()))
@@ -227,7 +227,7 @@ class Manager:
         """
         variables1, product_types1, bbox1, pressure_levels1, dates1, from_date1 = self._input_checks(product, variables, from_date, to_date, bbox, freq_interval, product_types, pressure_levels, output_format)
 
-        model_type = models.model_types[product]
+        # model_type = models.model_types[product]
 
         existing_job_hashes = set()
         if check_existing_files:
@@ -254,7 +254,7 @@ class Manager:
         with booklet.open(self.staged_file_path, 'w') as sf:
 
             for var in variables1:
-                dict1 = {'type': model_type, 'data_format': output_format, 'variable': [var], 'area': bbox1, 'download_format': 'unarchived'}
+                dict1 = {'product': product, 'data_format': output_format, 'variable': [var], 'area': bbox1, 'download_format': 'unarchived'}
 
                 if isinstance(product_types1, list):
                     dict1['product_type'] = product_types1
@@ -303,59 +303,56 @@ class Manager:
             raise ValueError('file does not exist.')
 
 
-    def clear_jobs(self, all_jobs=False, only_failed=False):
+    def clear_jobs(self, job_status=['failed'], remove_local=False):
         """
-        Remove jobs on the server and on the local files.
-        When all_jobs is False, then only the jobs that are not in the jobs file will be removed. Otherwise, all jobs will be removed.
+        Remove jobs on the server and optionally on the local files.
+        
+        Parameters
+        ----------
+        job_status: bool, str, or list of str
+            The job statuses that should be removed. If True, then remove everything.
+        remove_local: bool
+            Should the jobs be removed from the local staged file in addition to the server?
+
+        Returns
+        -------
+        set of the removed job ids
         """
+        if isinstance(job_status, str):
+            job_status = [job_status]
+        elif isinstance(job_status, bool):
+            if job_status:
+                job_status = utils.all_statuses
+            else:
+                raise ValueError('If job_status is a bool, it must be True.')
+        elif not isinstance(job_status, (list, tuple, set)):
+            raise TypeError('job_status must be iterable or bool.')
+
         jobs_list = self._get_jobs_list()
 
         http_session = utils.session()
 
         remove_job_ids = set()
-        job_ids = set()
+        with booklet.open(self.staged_file_path, 'w') as sf:
+            for job_dict in jobs_list:
+                status = job_dict['status']
+    
+                if status in job_status:
+                    job_id = job_dict['jobID']
+                    url = utils.job_delete_url.format(url_endpoint=self.url_endpoint, job_id=job_id)
+                    resp = http_session.request('delete', url, headers=self.headers)
+                    if resp.status // 100 != 2:
+                        raise urllib3.exceptions.HTTPError(resp.json())
 
-        if not all_jobs:
-            with booklet.open(self.job_file_path, 'r') as jf:
-                for jf_job_id in jf.keys():
-                    job_ids.add(jf_job_id)
-
-        for job_dict in jobs_list:
-            job_id = job_dict['jobID']
-            status = job_dict['status']
-
-            job_id_bool = job_id in job_ids
-            failed_bool = status == 'failed'
-
-            if all_jobs:
-                if only_failed:
-                    if failed_bool:
-                        remove_job_ids.add(job_id)
-                else:
-                    remove_job_ids.add(job_id)
-            elif not job_id_bool:
-                if only_failed:
-                    if failed_bool:
-                        remove_job_ids.add(job_id)
-                else:
                     remove_job_ids.add(job_id)
 
-        if remove_job_ids:
-            with booklet.open(self.job_file_path, 'w') as jf:
-                with booklet.open(self.staged_file_path, 'w') as sf:
-                    for job_id in remove_job_ids:
-                        url = utils.job_delete_url.format(url_endpoint=self.url_endpoint, job_id=job_id)
-                        resp = http_session.request('delete', url, headers=self.headers)
-                        if resp.status // 100 != 2:
-                            raise urllib3.exceptions.HTTPError(resp.json())
+                    ## Remove job request in staged file
+                    if remove_local:
+                        job_hash = job_dict['job_hash']
+                        if job_hash in sf:
+                            del sf[job_hash]
 
-                        sleep(1) # Don't hit the API too fast
-                        if job_id in job_ids:
-                            job_hash = jf[self.job_id]
-                            del jf[self.job_id]
-
-                            if job_hash in sf:
-                                del sf[job_hash]
+                    sleep(1) # Don't hit the API too fast
 
         return remove_job_ids
 
@@ -373,49 +370,49 @@ class Manager:
         -------
         set of the job hashes
         """
-        jobs_list = self._get_jobs_list()
+        jobs = self.get_jobs()
 
-        n_queued = 0
-        for job_dict in jobs_list:
-            if job_dict['status'] == 'accepted':
-                n_queued += 1
+        job_hashes = set()
+        for job in jobs:
+            if job.status == 'accepted':
+                job_hashes.add(job.job_hash)
 
-        if n_queued < n_jobs_queued:
+        if len(job_hashes) < n_jobs_queued:
             # print(f'-- {extra_n_queued} jobs will be submitted')
 
             http_session = utils.session()
 
-            job_hashes = set()
             submitted_jobs = set()
             with booklet.open(self.staged_file_path, 'r') as sf:
-                with booklet.open(self.job_file_path, 'w') as jf:
-                    for job_id, jf_job_hash in jf.items():
-                        job_hashes.add(jf_job_hash)
+                # with booklet.open(self.job_file_path, 'w') as jf:
+                #     for job_id, jf_job_hash in jf.items():
+                #         job_hashes.add(jf_job_hash)
 
-                    for job_hash, request_bytes in sf.items():
-                        if n_queued == n_jobs_queued:
-                            break
+                for job_hash, request_bytes in sf.items():
+                    if len(job_hashes) == n_jobs_queued:
+                        break
 
-                        if job_hash not in job_hashes:
-                            request_model = models.loads(request_bytes)
-                            model_type = request_model.__class__.__name__
-                            product = models.inv_model_types[model_type]
-                            request_url = utils.request_url.format(url_endpoint=self.url_endpoint, product=product)
+                    if job_hash not in job_hashes:
+                        # request_model = models.loads(request_bytes)
+                        request_dict = msgspec.json.decode(request_bytes)
+                        # model_type = request_model.__class__.__name__
+                        product = request_dict['product']
+                        request_url = utils.request_url.format(url_endpoint=self.url_endpoint, product=product)
 
-                            request_dict = msgspec.to_builtins(request_model)
+                        # request_dict = msgspec.to_builtins(request_model)
+                        request_dict['job_hash'] = job_hash
 
-                            resp = http_session.request('post', request_url, json={'inputs': request_dict}, headers=self.headers)
-                            resp_dict = resp.json()
-                            if resp.status // 100 != 2:
-                                print(resp_dict)
-                            else:
-                                job_id = resp_dict['jobID']
-                                jf[job_id] = job_hash
-                                job_hashes.add(job_hash)
-                                submitted_jobs.add(job_hash)
-                                n_queued += 1
+                        resp = http_session.request('post', request_url, json={'inputs': request_dict}, headers=self.headers)
+                        resp_dict = resp.json()
+                        if resp.status // 100 != 2:
+                            print(resp_dict)
+                        else:
+                            # job_id = resp_dict['jobID']
+                            # jf[job_id] = job_hash
+                            job_hashes.add(job_hash)
+                            submitted_jobs.add(job_hash)
 
-                            sleep(2) # Submitting jobs too quickly makes CDS angry
+                        sleep(2) # Submitting jobs too quickly makes CDS angry
 
             return submitted_jobs
         else:
@@ -448,26 +445,17 @@ class Manager:
 
         Returns
         -------
-        dict of the jobs
+        list of Jobs
         """
         jobs_list = self._get_jobs_list()
-        jobs = {}
+        jobs = []
 
-        n_missing_jobs = 0
-        with booklet.open(self.job_file_path) as jf:
-            for job_dict in jobs_list:
-                # if job_dict['status'] == 'successful':
-                #     d
-                job_id = job_dict['jobID']
-                job_hash = jf.get(job_id)
-                if job_hash:
-                    job = Job(job_dict, job_hash, self.url_endpoint, self.headers, self.save_path, self.staged_file_path, self.job_file_path, self.s3_session_kwargs, self.s3_base_key)
-                    jobs[job_hash] = job
-                else:
-                    n_missing_jobs += 1
-
-        if n_missing_jobs> 0:
-            print(f'There are {n_missing_jobs} jobs that are not in the jobs file file.')
+        for job_dict in jobs_list:
+            # if job_dict['status'] == 'successful':
+            #     d
+            # job_hash = job_dict['job_hash']
+            job = Job(job_dict, self.url_endpoint, self.headers, self.save_path, self.staged_file_path, self.s3_session_kwargs, self.s3_base_key)
+            jobs.append(job)
 
         return jobs
 
@@ -494,22 +482,31 @@ class Manager:
                 break
 
             ## Check and remove failed jobs
-            failed_bool = False
-            for job_hash, job in jobs.items():
-                if job.status == 'failed':
-                    failed_bool = True
+            # failed_bool = False
+            # for job_hash, job in jobs.items():
+            #     if job.status == 'failed':
+            #         failed_bool = True
 
-            if failed_bool:
-                _ = self.clear_jobs(all_jobs=False, only_failed=True)
-                sleep(2)
-                jobs = self.get_jobs()
+            # if failed_bool:
+            #     _ = self.clear_jobs(all_jobs=False, only_failed=True)
+            #     sleep(2)
+            #     jobs = self.get_jobs()
 
-            ## If any are successful, then download
-            for job_hash, job in jobs.items():
+            ## If any are successful, then download otherwise delete and try again later
+            for job in jobs:
                 if job.status == 'successful':
-                    results_path = job.download_results()
-                    print(f'{job.file_name} completed')
-                    n_completed += 1
+                    if job.error:
+                        print('-- Job status is successful, but there are no results:')
+                        print(job.error)
+                        job.delete(False)
+                    else:
+                        results_path = job.download_results()
+                        print(f'-- {job.file_name} completed')
+                        n_completed += 1
+                elif job.status == 'failed':
+                    job.delete(False)
+                    print('-- Job failed with the error:')
+                    print(job.error)
 
             sleep(60)
 
@@ -520,16 +517,17 @@ class Job:
     """
 
     """
-    def __init__(self, job_dict, job_hash, url_endpoint, headers, save_path, staged_file_path, job_file_path, s3_session_kwargs, s3_base_key):
+    def __init__(self, job_dict, url_endpoint, headers, save_path, staged_file_path, s3_session_kwargs, s3_base_key):
         """
 
         """
         self.s3_base_key = s3_base_key
         self.s3_session_kwargs = s3_session_kwargs
-        self.job_hash = job_hash
+        self._job_hash = None
+        self._file_name = None
         self.save_path = save_path
         self.staged_file_path = staged_file_path
-        self.job_file_path = job_file_path
+        # self.job_file_path = job_file_path
         self.url_endpoint = url_endpoint
         self.headers = headers
         self.product = job_dict['processID']
@@ -567,23 +565,39 @@ class Job:
             self.results = None
             self.error = None
 
-        request_bytes = utils.get_value(self.staged_file_path, self.job_hash)
-        request_model = models.loads(request_bytes)
-
-        file_name = utils.make_file_name(request_model, self.job_hash, self.product)
-        self.file_name = file_name
-
 
     def __repr__(self):
         """
 
         """
         return f"""
+        product:  {self.product}
         job_id:   {self.job_id}
         status:   {self.status}
-        job_hash: {self.job_hash}
-        product:  {self.product}
+        created:  {self.created}
         """
+
+
+    @property
+    def job_hash(self):
+        """
+
+        """
+        if self._job_hash is None:
+            self.update()
+
+        return self._job_hash
+
+
+    @property
+    def file_name(self):
+        """
+
+        """
+        if self._file_name is None:
+            self.update()
+
+        return self._file_name
 
 
     def update(self):
@@ -593,8 +607,13 @@ class Job:
         if self.status == 'dismissed':
             raise ValueError('Job has been deleted.')
 
+        if self._job_hash is None:
+            req_bool = 'true'
+        else:
+            req_bool = 'false'
+
         http_session = utils.session()
-        url = utils.job_status_url.format(url_endpoint=self.url_endpoint, job_id=self.job_id)
+        url = utils.job_status_url.format(url_endpoint=self.url_endpoint, job_id=self.job_id, req_bool=req_bool)
         jobs_resp = http_session.request('get', url, headers=self.headers)
         if jobs_resp.status // 100 != 2:
             raise urllib3.exceptions.HTTPError(jobs_resp.json())
@@ -633,15 +652,29 @@ class Job:
                 self.error = jobs_resp.json()
                 self.results = None
 
-            ## Remove from Queue file
-            if self.status in ('successful', 'failed'):
-                with booklet.open(self.job_file_path, 'w') as f:
-                    del f[self.job_id]
+                ## Remove from Queue file
+                # if self.status in ('successful', 'failed'):
+                #     with booklet.open(self.job_file_path, 'w') as f:
+                #         del f[self.job_id]
+
+        if req_bool == 'true':
+            request_dict = job_dict['metadata']['request']['ids']
+            self._job_hash = request_dict['job_hash']
+            # request_bytes = utils.get_value(self.staged_file_path, self._job_hash)
+            # request_model = models.loads(request_bytes)
+
+            file_name = utils.make_file_name(request_dict, self._job_hash, self.product)
+            self._file_name = file_name
 
 
-    def delete(self):
+    def delete(self, remove_local=True):
         """
         Delete the job from the server and locally.
+
+        Parameters
+        ----------
+        remove_local: bool
+            Should the job be removed from the local staged file in addition to the server?
         """
         http_session = utils.session()
         url = utils.job_delete_url.format(url_endpoint=self.url_endpoint, job_id=self.job_id)
@@ -651,32 +684,24 @@ class Job:
 
         self.status = 'dismissed'
 
-        ## Remove from Job file and staged file
-        with booklet.open(self.staged_file_path, 'w') as sf:
-            with booklet.open(self.job_file_path, 'w') as jf:
-                if self.job_id in jf:
-                    job_hash = jf[self.job_id]
-                    del jf[self.job_id]
-
-                    if job_hash in sf:
-                        del sf[job_hash]
+        ## Remove from staged file
+        if remove_local:
+            with booklet.open(self.staged_file_path, 'w') as sf:
+                if self.job_hash in sf:
+                    del sf[self.job_hash]
 
 
-    def _download_results_local(self, chunk_size=2**21, delete_job=True):
+    def _download_results_local(self, chunk_size=2**21):
         """
 
         """
-        if self.results is None:
-            raise ValueError('No results to download.')
-
-        file_path = self.save_path.joinpath(self.file_name)
-
         http_session = utils.session()
         download_url = self.results['href']
         resp = http_session.request('get', download_url, preload_content=False)
         if resp.status // 100 != 2:
             raise urllib3.exceptions.HTTPError(resp.json())
 
+        file_path = self.save_path.joinpath(self.file_name)
         # start = time()
         with open(file_path, 'wb') as f:
             shutil.copyfileobj(resp, f, chunk_size)
@@ -685,20 +710,13 @@ class Job:
 
         resp.release_conn()
 
-        ## Remove from server
-        if delete_job:
-            self.delete()
-
         return file_path
 
 
-    def _download_results_s3(self, chunk_size=2**21, delete_job=True):
+    def _download_results_s3(self, chunk_size=2**21):
         """
 
         """
-        if self.results is None:
-            raise ValueError('No results to download.')
-
         http_session = utils.session()
         download_url = self.results['href']
         resp = http_session.request('get', download_url, preload_content=False)
@@ -720,10 +738,6 @@ class Job:
 
         os.unlink(file_path)
 
-        ## Remove from server
-        if delete_job:
-            self.delete()
-
         return key_name
 
 
@@ -742,10 +756,17 @@ class Job:
         -------
         pathlib.Path to the file or the S3 object key
         """
+        if self.results is None:
+            raise ValueError('No results to download.')
+
         if self.s3_session_kwargs is None:
-            path = self._download_results_local(chunk_size, delete_job)
+            path = self._download_results_local(chunk_size)
         else:
-            path = self._download_results_s3(chunk_size, delete_job)
+            path = self._download_results_s3(chunk_size)
+
+        ## Remove from server
+        if delete_job:
+            self.delete()
 
         return path
 
