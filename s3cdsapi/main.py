@@ -481,17 +481,6 @@ class Manager:
             if len(jobs) == 0:
                 break
 
-            ## Check and remove failed jobs
-            # failed_bool = False
-            # for job_hash, job in jobs.items():
-            #     if job.status == 'failed':
-            #         failed_bool = True
-
-            # if failed_bool:
-            #     _ = self.clear_jobs(all_jobs=False, only_failed=True)
-            #     sleep(2)
-            #     jobs = self.get_jobs()
-
             ## If any are successful, then download otherwise delete and try again later
             for job in jobs:
                 if job.status == 'successful':
