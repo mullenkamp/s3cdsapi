@@ -9,7 +9,7 @@ import os
 import booklet
 from time import time
 import urllib3
-# from s3cdsapi import Manager
+from s3cdsapi import Manager
 
 
 ##############################################
@@ -24,7 +24,8 @@ s3_base_key = 'reanalysis-era5-land/'
 variables = ['2m_dewpoint_temperature']
 from_date = '1950-01-01'
 to_date = '1950-01-31'
-to_date = '1990-12-31'
+to_date = '1960-12-31'
+to_date = '2021-12-31'
 bbox = [-34.3, 166.3, -47.3, 178.6]
 product = 'reanalysis-era5-land'
 freq_interval = 'Y'
@@ -44,7 +45,7 @@ key = 'bfe6e61db232a76f2f0af9'
 # staged_file = stager.stage_jobs(product, variables, from_date, to_date, bbox, freq_interval, product_types, pressure_levels, output_format)
 
 self = Manager(save_path, cds_url_endpoint, cds_key)
-self = Manager(save_path, cds_url_endpoint, cds_key, s3_base_key, access_key_id=access_key_id, access_key=access_key, bucket=bucket, endpoint_url=endpoint_url)
+self = Manager(save_path, cds_url_endpoint, cds_key, s3_base_key, **s3_remote)
 
 staged_file_path = self.stage_jobs(product, variables, from_date, to_date, bbox, freq_interval, product_types, pressure_levels, output_format)
 

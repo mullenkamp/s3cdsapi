@@ -359,7 +359,7 @@ product_types = {'reanalysis-era5-single-levels': [
                 'reanalysis']
     }
 
-available_freq_intervals = ['1D', 'D', '1M', 'M', 'Y']
+available_freq_intervals = ('D', 'M', 'Y')
 # available_freq_intervals.extend(y_ints)
 
 months = [

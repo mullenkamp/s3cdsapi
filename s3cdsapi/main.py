@@ -127,8 +127,8 @@ class Manager:
                 raise ValueError(p + ' is not one of the available variables for this product.')
 
         # freq intervals
-        if not freq_interval in self.available_freq_intervals:
-            raise ValueError('freq_interval must be one of: ' + str(self.available_freq_intervals))
+        if not any([freq in freq_interval for freq in  self.available_freq_intervals]):
+            raise ValueError('freq_interval must contain one of: ' + str(self.available_freq_intervals))
 
         # Product types
         if product in self.available_product_types:
@@ -306,7 +306,7 @@ class Manager:
     def clear_jobs(self, job_status=['failed'], remove_local=False):
         """
         Remove jobs on the server and optionally on the local files.
-        
+
         Parameters
         ----------
         job_status: bool, str, or list of str
@@ -336,7 +336,7 @@ class Manager:
         with booklet.open(self.staged_file_path, 'w') as sf:
             for job_dict in jobs_list:
                 status = job_dict['status']
-    
+
                 if status in job_status:
                     job_id = job_dict['jobID']
                     url = utils.job_delete_url.format(url_endpoint=self.url_endpoint, job_id=job_id)
