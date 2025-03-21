@@ -464,8 +464,14 @@ class Manager:
         n_completed = 0
         while True:
             _ = self.submit_jobs(n_jobs_queued=n_jobs_queued)
-            sleep(2)
-            jobs = self.get_jobs()
+            sleep(4)
+            try:
+                jobs = self.get_jobs()
+            except urllib3.exceptions.HTTPError as error:
+                print('-- get_jobs failed with the following exception:')
+                print(error)
+                jobs = []
+
             if len(jobs) == 0:
                 break
 
@@ -485,7 +491,7 @@ class Manager:
                     print('-- Job failed with the error:')
                     print(job.error)
 
-            sleep(60)
+            sleep(90)
 
         return n_completed
 
