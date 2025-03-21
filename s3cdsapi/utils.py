@@ -13,6 +13,7 @@ from hashlib import blake2s
 import urllib3
 import urllib.parse
 from urllib3.util import Retry, Timeout
+from s3func import S3Session, HttpSession
 
 # import product_params
 from . import product_params
@@ -112,6 +113,44 @@ def process_local_paths(save_path):
 #     file_name = file_naming_str.format(product=product, variable=variable, job_hash=job_hash, ext=ext, from_date=from_date, to_date=to_date)
 
 #     return file_name
+
+
+def parse_job_hash(file_name):
+    """
+
+    """
+    job_hash = None
+    if file_name.endswith('.grib') or file_name.endswith('.nc'):
+        file_name_split = file_name.split('.')
+        if len(file_name_split) == 5:
+            job_hash = file_name_split[-2]
+
+    return job_hash
+
+
+def check_completed_jobs(save_path, s3_base_key, s3_session_kwargs):
+    """
+
+    """
+    existing_job_hashes = set()
+    if s3_session_kwargs is None:
+        for file in save_path.iterdir():
+            if file.is_file():
+                file_name = file.name
+                job_hash = parse_job_hash(file_name)
+                if job_hash:
+                    existing_job_hashes.add(job_hash)
+    else:
+        s3_session = S3Session(**s3_session_kwargs)
+        resp = s3_session.list_objects(s3_base_key)
+        for obj in resp.iter_objects():
+            key = obj['key']
+            file_name = key.split('/')[-1]
+            job_hash = parse_job_hash(file_name)
+            if job_hash:
+                existing_job_hashes.add(job_hash)
+
+    return existing_job_hashes
 
 
 def make_file_name(request_dict, job_hash, product):

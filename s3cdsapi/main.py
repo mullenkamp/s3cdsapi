@@ -229,26 +229,7 @@ class Manager:
 
         # model_type = models.model_types[product]
 
-        existing_job_hashes = set()
-        if check_existing_files:
-            if output_format == 'netcdf':
-                suffix = '.nc'
-            else:
-                suffix = '.grib'
-            if self.s3_session_kwargs is None:
-                for file in self.save_path.iterdir():
-                    if file.is_file():
-                        if file.suffix == suffix:
-                            job_hash = file.name.split('.')[-2]
-                            existing_job_hashes.add(job_hash)
-            else:
-                s3_session = S3Session(**self.s3_session_kwargs)
-                resp = s3_session.list_objects(self.s3_base_key)
-                for obj in resp.iter_objects():
-                    key = obj['key']
-                    file_name = key.split('/')[-1]
-                    job_hash = file_name.split('.')[-2]
-                    existing_job_hashes.add(job_hash)
+        existing_job_hashes = utils.check_completed_jobs(self.save_path, self.s3_base_key, self.s3_session_kwargs)
 
         ## Add requests
         with booklet.open(self.staged_file_path, 'w') as sf:
@@ -283,6 +264,11 @@ class Manager:
 
                     if job_hash not in sf and job_hash not in existing_job_hashes:
                         sf[job_hash] = b1
+
+            ## Remove jobs that have already completed and saved
+            for job_hash in existing_job_hashes:
+                if job_hash in sf:
+                    del sf[job_hash]
 
         return self.staged_file_path
 
@@ -376,6 +362,10 @@ class Manager:
         for job in jobs:
             if job.status == 'accepted':
                 job_hashes.add(job.job_hash)
+
+        existing_job_hashes = utils.check_completed_jobs(self.save_path, self.s3_base_key, self.s3_session_kwargs)
+
+        job_hashes.update(existing_job_hashes)
 
         if len(job_hashes) < n_jobs_queued:
             # print(f'-- {extra_n_queued} jobs will be submitted')
