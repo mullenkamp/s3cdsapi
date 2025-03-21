@@ -358,16 +358,14 @@ class Manager:
         """
         jobs = self.get_jobs()
 
-        job_hashes = set()
+        queued_job_hashes = set()
         for job in jobs:
             if job.status == 'accepted':
-                job_hashes.add(job.job_hash)
+                queued_job_hashes.add(job.job_hash)
 
         existing_job_hashes = utils.check_completed_jobs(self.save_path, self.s3_base_key, self.s3_session_kwargs)
 
-        job_hashes.update(existing_job_hashes)
-
-        if len(job_hashes) < n_jobs_queued:
+        if len(queued_job_hashes) < n_jobs_queued:
             # print(f'-- {extra_n_queued} jobs will be submitted')
 
             http_session = utils.session()
@@ -379,10 +377,10 @@ class Manager:
                 #         job_hashes.add(jf_job_hash)
 
                 for job_hash, request_bytes in sf.items():
-                    if len(job_hashes) == n_jobs_queued:
+                    if len(queued_job_hashes) == n_jobs_queued:
                         break
 
-                    if job_hash not in job_hashes:
+                    if job_hash not in existing_job_hashes or job_hash not in queued_job_hashes:
                         # request_model = models.loads(request_bytes)
                         request_dict = msgspec.json.decode(request_bytes)
                         # model_type = request_model.__class__.__name__
@@ -399,7 +397,7 @@ class Manager:
                         else:
                             # job_id = resp_dict['jobID']
                             # jf[job_id] = job_hash
-                            job_hashes.add(job_hash)
+                            queued_job_hashes.add(job_hash)
                             submitted_jobs.add(job_hash)
 
                         sleep(2) # Submitting jobs too quickly makes CDS angry
