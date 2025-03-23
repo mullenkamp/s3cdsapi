@@ -50,6 +50,7 @@ self = Manager(save_path, cds_url_endpoint, cds_key, s3_base_key, **s3_remote)
 staged_file_path = self.stage_jobs(product, variables, from_date, to_date, bbox, freq_interval, product_types, pressure_levels, output_format)
 
 staged_dict = self.read_staged_file()
+print({h: s['year'][0] for h, s in staged_dict.items()})
 
 removed_job_ids = self.clear_jobs()
 

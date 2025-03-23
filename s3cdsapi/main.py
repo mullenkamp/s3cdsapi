@@ -12,11 +12,13 @@ import pandas as pd
 import numpy as np
 import booklet
 from time import sleep, time
+from datetime import datetime
 import copy
 import shutil
 import msgspec
 from typing import Set, Optional, Dict, Tuple, List, Union, Any, Annotated
 from s3func import S3Session, HttpSession
+import logging
 import urllib3
 # import urllib.parse
 # from urllib3.util import Retry, Timeout
@@ -25,10 +27,13 @@ urllib3.disable_warnings()
 # import utils, models, product_params
 from . import utils, models, product_params
 
+logger = logging.getLogger(__name__)
+
+
 ################################################
 ### Parameters
 
-
+logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=logging.WARNING)
 
 ###############################################
 ### Classes
@@ -360,7 +365,8 @@ class Manager:
 
         queued_job_hashes = set()
         for job in jobs:
-            if job.status == 'accepted':
+            sleep(1)
+            if job.status in ('accepted', 'running'):
                 queued_job_hashes.add(job.job_hash)
 
         existing_job_hashes = utils.check_completed_jobs(self.save_path, self.s3_base_key, self.s3_session_kwargs)
@@ -377,10 +383,10 @@ class Manager:
                 #         job_hashes.add(jf_job_hash)
 
                 for job_hash, request_bytes in sf.items():
-                    if len(queued_job_hashes) == n_jobs_queued:
+                    if len(queued_job_hashes) >= n_jobs_queued:
                         break
 
-                    if job_hash not in existing_job_hashes or job_hash not in queued_job_hashes:
+                    if (job_hash not in existing_job_hashes) and (job_hash not in queued_job_hashes):
                         # request_model = models.loads(request_bytes)
                         request_dict = msgspec.json.decode(request_bytes)
                         # model_type = request_model.__class__.__name__
@@ -468,8 +474,10 @@ class Manager:
             try:
                 jobs = self.get_jobs()
             except urllib3.exceptions.HTTPError as error:
-                print('-- get_jobs failed with the following exception:')
-                print(error)
+                # print(datetime.now().isoformat()[:-7])
+                logger.error('-- get_jobs failed with the error: ', error)
+                # print('-- get_jobs failed with the error:')
+                # print(error)
                 jobs = []
 
             if len(jobs) == 0:
@@ -484,12 +492,16 @@ class Manager:
                         job.delete(False)
                     else:
                         results_path = job.download_results()
+                        print(datetime.now().isoformat()[:-7])
                         print(f'-- {job.file_name} completed')
+                        logger.info(f'-- {job.file_name} completed')
                         n_completed += 1
                 elif job.status == 'failed':
                     job.delete(False)
-                    print('-- Job failed with the error:')
-                    print(job.error)
+                    logger.error('-- Job failed with the error: ', job.error)
+                    # print(datetime.now().isoformat()[:-7])
+                    # print('-- Job failed with the error:')
+                    # print(job.error)
 
             sleep(90)
 
