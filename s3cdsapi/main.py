@@ -333,7 +333,7 @@ class Manager:
                     url = utils.job_delete_url.format(url_endpoint=self.url_endpoint, job_id=job_id)
                     resp = http_session.request('delete', url, headers=self.headers)
                     if resp.status // 100 != 2:
-                        raise urllib3.exceptions.HTTPError(resp.json())
+                        raise urllib3.exceptions.HTTPError('clear_jobs failed with status {}: {}'.format(resp.status, resp.json()))
 
                     remove_job_ids.add(job_id)
 
@@ -363,11 +363,14 @@ class Manager:
         """
         jobs = self.get_jobs()
 
+        running_job_hashes = set()
         queued_job_hashes = set()
         for job in jobs:
             sleep(1)
-            if job.status in ('accepted', 'running'):
+            if job.status == 'accepted':
                 queued_job_hashes.add(job.job_hash)
+            elif job.status == 'running':
+                running_job_hashes.add(job.job_hash)
 
         existing_job_hashes = utils.check_completed_jobs(self.save_path, self.s3_base_key, self.s3_session_kwargs)
 
@@ -386,7 +389,7 @@ class Manager:
                     if len(queued_job_hashes) >= n_jobs_queued:
                         break
 
-                    if (job_hash not in existing_job_hashes) and (job_hash not in queued_job_hashes):
+                    if (job_hash not in existing_job_hashes) and (job_hash not in queued_job_hashes) and (job_hash not in running_job_hashes):
                         # request_model = models.loads(request_bytes)
                         request_dict = msgspec.json.decode(request_bytes)
                         # model_type = request_model.__class__.__name__
@@ -399,7 +402,7 @@ class Manager:
                         resp = http_session.request('post', request_url, json={'inputs': request_dict}, headers=self.headers)
                         resp_dict = resp.json()
                         if resp.status // 100 != 2:
-                            print(resp_dict)
+                            logger.warning('-- submitting job failed with status %s: %s', (resp.status, resp_dict))
                         else:
                             # job_id = resp_dict['jobID']
                             # jf[job_id] = job_hash
@@ -421,12 +424,12 @@ class Manager:
         url = utils.jobs_url.format(url_endpoint=self.url_endpoint)
         jobs_resp = http_session.request('get', url, headers=self.headers)
         if jobs_resp.status // 100 != 2:
-            raise urllib3.exceptions.HTTPError(jobs_resp.json())
+            raise urllib3.exceptions.HTTPError('job_list failed with status {}: {}'.format(jobs_resp.status, jobs_resp.json()))
 
         jobs_dict = jobs_resp.json()
         n_jobs = jobs_dict['metadata']['totalCount']
         if n_jobs == 100:
-            print('The number of jobs on the server is greater than 100. Please delete finished/failed jobs using clear_jobs.')
+            logger.warning('The number of jobs on the server is greater than 100. Please delete finished/failed jobs using clear_jobs.')
 
         jobs_list = jobs_dict['jobs']
 
@@ -475,7 +478,7 @@ class Manager:
                 jobs = self.get_jobs()
             except urllib3.exceptions.HTTPError as error:
                 # print(datetime.now().isoformat()[:-7])
-                logger.error('-- get_jobs failed with the error: ', error)
+                logger.error('-- get_jobs failed with the error: %s', error)
                 # print('-- get_jobs failed with the error:')
                 # print(error)
                 jobs = []
@@ -498,7 +501,7 @@ class Manager:
                         n_completed += 1
                 elif job.status == 'failed':
                     job.delete(False)
-                    logger.error('-- Job failed with the error: ', job.error)
+                    logger.error('-- Job failed with the error: %s', job.error)
                     # print(datetime.now().isoformat()[:-7])
                     # print('-- Job failed with the error:')
                     # print(job.error)
@@ -611,7 +614,7 @@ class Job:
         url = utils.job_status_url.format(url_endpoint=self.url_endpoint, job_id=self.job_id, req_bool=req_bool)
         jobs_resp = http_session.request('get', url, headers=self.headers)
         if jobs_resp.status // 100 != 2:
-            raise urllib3.exceptions.HTTPError(jobs_resp.json())
+            raise urllib3.exceptions.HTTPError('job update failed with status {}: {}'.format(jobs_resp.status, jobs_resp.json()))
 
         job_dict = jobs_resp.json()
 
@@ -675,7 +678,7 @@ class Job:
         url = utils.job_delete_url.format(url_endpoint=self.url_endpoint, job_id=self.job_id)
         resp = http_session.request('delete', url, headers=self.headers)
         if resp.status // 100 != 2:
-            raise urllib3.exceptions.HTTPError(resp.json())
+            raise urllib3.exceptions.HTTPError('job delete failed with status {}: {}'.format(resp.status, resp.json()))
 
         self.status = 'dismissed'
 
@@ -694,7 +697,7 @@ class Job:
         download_url = self.results['href']
         resp = http_session.request('get', download_url, preload_content=False)
         if resp.status // 100 != 2:
-            raise urllib3.exceptions.HTTPError(resp.json())
+            raise urllib3.exceptions.HTTPError('job download failed with status {}: {}'.format(resp.status, resp.json()))
 
         file_path = self.save_path.joinpath(self.file_name)
         # start = time()
@@ -716,7 +719,7 @@ class Job:
         download_url = self.results['href']
         resp = http_session.request('get', download_url, preload_content=False)
         if resp.status // 100 != 2:
-            raise urllib3.exceptions.HTTPError(resp.json())
+            raise urllib3.exceptions.HTTPError('job download failed with status {}: {}'.format(resp.status, resp.json()))
 
         file_path = self.save_path.joinpath(self.file_name)
         with open(file_path, 'wb') as f:
@@ -729,7 +732,7 @@ class Job:
         # reader = io.BufferedReader(resp, chunk_size)
         put_resp = s3_session.put_object(key_name, open(file_path, 'rb'))
         if put_resp.status // 100 != 2:
-            raise urllib3.exceptions.HTTPError(put_resp.error)
+            raise urllib3.exceptions.HTTPError('job upload failed with status {}: {}'.format(put_resp.status, put_resp.json()))
 
         os.unlink(file_path)
 

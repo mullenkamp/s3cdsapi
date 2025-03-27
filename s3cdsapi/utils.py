@@ -217,7 +217,7 @@ def time_request(from_date1, to_date1):
     return {'year': years, 'month': months, 'day': days, 'time': product_params.times}
 
 
-def session(max_pool_connections: int = 10, max_attempts: int=3, timeout: int=120):
+def session(max_pool_connections: int = 10, max_attempts: int=5, timeout: int=120):
     """
     Function to setup a urllib3 pool manager for url downloads.
 
@@ -238,6 +238,8 @@ def session(max_pool_connections: int = 10, max_attempts: int=3, timeout: int=12
     retries = Retry(
         total=max_attempts,
         backoff_factor=1,
+        allowed_methods=['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PUT', 'POST'],
+        status_forcelist=[401, 403, 413, 429, 500, 503],
         )
     http = urllib3.PoolManager(num_pools=max_pool_connections, timeout=timeout, retries=retries)
 
