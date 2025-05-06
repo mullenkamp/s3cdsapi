@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling>1.26"]
+build-backend = "hatchling.build"
+
 [project]
 name = "s3cdsapi"
 authors = [
@@ -19,6 +23,10 @@ dependencies = [
   'msgspec',
 ]
 
+[project.urls]
+Documentation = "https://mullenkamp.github.io/s3cdsapi/"
+Source = "https://github.com/mullenkamp/s3cdsapi"
+
 [dependency-groups]
 dev = [
   "spyder-kernels==2.5.2",
@@ -34,64 +42,16 @@ dev = [
 [tool.hatch.metadata]
 allow-direct-references = true
 
-# [tool.hatch.version]
-# source = "regex_commit"
-# commit_extra_args = ["-e"]
-# path = "s3cdsapi/__init__.py"
-
-[tool.hatch.envs.default]
-python = "3.11"
-dependencies = [
-    "spyder-kernels==2.5.2",
-    "black",
-    "mypy",
-    "ruff",
-    "pytest",
-    "pytest-cov",
-    "mkdocs-material",
-    "mkdocstrings[python]",
-    
+[tool.hatch.build.targets.sdist]
+include = [
+    "/s3cdsapi",
+]
+exclude = [
+    "/s3cdsapi/tests/*",
 ]
 
-[[tool.hatch.envs.all.matrix]]
-python = ['3.10', '3.11', '3.12']
-
-[tool.hatch.envs.lint]
-detached = true
-dependencies = [
-  "black>=23.1.0",
-  "mypy>=1.0.0",
-  "ruff>=0.0.243",
-]
-[tool.hatch.envs.lint.scripts]
-typing = "mypy --install-types --non-interactive {args:src/s3cdsapi tests}"
-style = [
-  "ruff {args:.}",
-  "black --check --diff {args:.}",
-]
-fmt = [
-  "black {args:.}",
-  "ruff --fix {args:.}",
-  "style",
-]
-all = [
-  "style",
-  "typing",
-]
-
-[tool.hatch.envs.default.scripts]
-test = "pytest {args:tests}"
-test-cov = "coverage run -m pytest {args:tests}"
-cov-report = [
-  "- coverage combine",
-  "coverage report",
-]
-cov = [
-  "test-cov",
-  "cov-report",
-]
-docs-serve = "mkdocs serve"
-docs-build = "mkdocs build"
+[tool.hatch.version]
+path = "s3cdsapi/__init__.py"
 
 [tool.black]
 target-version = ["py37"]
@@ -171,22 +131,3 @@ exclude_lines = [
   "if __name__ == .__main__.:",
   "if TYPE_CHECKING:",
 ]
-
-[build-system]
-requires = ["hatchling>=1.26.1"]
-build-backend = "hatchling.build"
-
-[project.urls]
-Documentation = "https://mullenkamp.github.io/s3cdsapi/"
-Source = "https://github.com/mullenkamp/s3cdsapi"
-
-[tool.hatch.build.targets.sdist]
-include = [
-    "/s3cdsapi",
-]
-exclude = [
-    "/s3cdsapi/tests/*",
-]
-
-[tool.hatch.version]
-path = "s3cdsapi/__init__.py"
